@@ -1,0 +1,279 @@
+import java.awt.BorderLayout;
+import java.awt.Container;
+import java.awt.Frame;
+import java.awt.Label;
+import java.awt.Panel;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
+
+import javax.swing.ImageIcon;
+import javax.swing.JButton;
+import javax.swing.JOptionPane;
+import javax.swing.Timer;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+
+
+public class MemoryGame extends JFrame {
+    private Timer timer = null; // 시간을 체크하기 위해서 쓰는 Timer Class
+
+    private int time = 0;       // 시간 저장
+    private int rest = 0;       // 맞춰야 하는 횟수 저장
+    private int cntTry = 0;     // 시도한 횟수 저장
+    private int firstend = 0;
+
+    private final int fw = 1225, fh = 980;   // 사용할 frame에 크기 지정
+    private final int row = 3;              // 사용할 카드의 행 크기
+    private final int col = 6;              // 사용할 카드의 열 크기
+
+    private int isChoice = 0;               // 첫번째 선택인지 아닌지 확인
+
+    private int choice = 0;                 // 첫번쨰 선택한 카드의 숫자를 임시 저장
+    private int choiceRow = -1;             // 첫번째 선택한 카드의 위치 Row
+    private int choiceCol = -1;             // 첫번째 선택한 카드의 위치 Col
+
+    private Label lTime = null;             // Label 타이머
+    private Label lCntTry = null;           // Label 시도횟수
+    private Label Rest = null;
+
+    private static final long serialVersionUID = 1L;
+    private Container c;
+
+    private JButton bRetry = null;          // Button 다시시도
+    private JButton bCard[][] = new JButton[row][col]; // 카드를 배열로 지정함, 카드의 갯수만큼
+
+    private int[][] card = new int[row][col]; // 카드뒷면 내용
+    private boolean[][] onClick = new boolean[row][col];
+    private ImageIcon[] icon = new ImageIcon[13]; // 카드뒷면의 이미지를 저장하기 위한 공간 선언
+
+    public static void main(String[] args) {
+        new MemoryGame(); // 게임 시작
+    }
+
+    MemoryGame() {
+        super("메모리 게임"); // Frame Class에 있는 생성자를 활용
+        makeGUI();              // GUI 만들기
+        initGame();             // 게임 초기화
+    }
+
+    void makeGUI() {
+        setSize(fw, fh);        // Frame의 크기 설정
+
+        Panel p1 = new Panel(); // 배열을 위해서 Panel 만들기 (Frame에 Panel를 쌓는 방식)
+        add(p1, BorderLayout.NORTH); // p1 Panel을 BordeLayout 형태에서 상단에 놓기
+
+        lTime = new Label("   time : 0 sec               ");      // 출력할 Label 설정
+        lCntTry = new Label("   opportunity : 20         ");   // 출력할 Label 설정
+        Rest = new Label(" rest : 9         ");
+        bRetry = new JButton("retire");                          // 출력할 버튼 설정
+
+        p1.add(lTime);      // Panel p1에 추가
+        p1.add(lCntTry);
+        p1.add(Rest);
+        p1.add(bRetry);
+
+        Panel p2 = new Panel(); // 새로운 레이아웃을 그리기 위해서, Panel 추가
+        add(p2);                // Frame에 p2 추가
+        p2.setLayout(null);     // BorderLayout과 같이 특별한 형태가 아닌, 레이아웃 사용
+
+        icon[0] = new ImageIcon("pic/card.jpg"); // 사용할 이미지에 카드 뒷면 이미지로, 파일 설정
+
+        for (int i = 0; i < row; i++) {             // 카드를 row행 생성
+            for (int j = 0; j < col; j++) {         // 카드를 col열 생성
+                bCard[i][j] = new JButton(icon[0]); // 초기는 카드 뒷면 이미지로 설정
+                bCard[i][j].setSize(200, 291);      // 카드크기는 행과열을 카드개수로 나눈값
+                bCard[i][j].setLocation(j * 200, i * 291); // 카드 위치를 연산해서  넣기
+
+                p2.add(bCard[i][j]);    // p2 Panel에 카드 추가
+
+                bCard[i][j].addActionListener(new CardClickedListener(i, j));     // 카드에 Listener 추가하기
+            }
+        }
+
+        setVisible(true); // 보이기
+
+        addWindowListener(new MyWindowAdapter()); // 윈도 창닫기 버튼 활성화
+
+        // 1000ms = 1초마다 time변수를 1씩 증가시키는 코드
+        timer = new Timer(1000, new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                time++;
+                updateDisplay();
+            }
+        });
+
+        // 다시하기 버튼을 누르면 initGame()을 호출하도록 Listener 를 설정
+        bRetry.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                initGame();
+            }
+        });
+    }
+
+
+    // 디스플레이 되는 Label 업데이트
+    void updateDisplay() {
+        lTime.setText("   time : " + time + " sec               ");
+        lCntTry.setText("  opportunity : " + (20-cntTry) + "         ");
+        Rest.setText(" rest : " + rest + "      ");
+    }
+
+    // 게임 초기화 메소드
+    void initGame() {
+        isChoice = 0;
+        cntTry = 0; // 시도횟수 초기화
+        time = 0; // 시간 초기화
+        firstend = 0;
+
+        int cnt = 9; // 필요한 카드 수
+        rest = cnt; // 맞춰야 하는 횟수 설정
+
+        int[] num = new int[cnt+1]; // 값을 넣어야하는 1~11까지의 배열 설정
+
+        // 카드 뒷면 설정
+        for (int i = 0; i < row; i++)
+            for (int j = 0; j < col; j++) {
+                onClick[i][j] = false;
+                int tmp = (int) (Math.random() * cnt) + 1; // 1~10 사이의 난수 발생
+                if (num[tmp] < 2) { // 카드가 같은 수로 2개 이상 설정되면 추가로 설정하지 않음
+                    num[tmp]++;
+                    card[i][j] = tmp;
+
+                    bCard[i][j].setIcon(icon[0]); // 카드 앞면 초기화
+                } else
+                    j--;
+            }
+
+
+        // 카드 이미지 설정하기
+        for (int i = 1; i <= 10; i++)
+            icon[i] = new ImageIcon("pic/card" + i + ".jpg");
+
+        // 타이머 시작하기
+        timer.start();
+    }
+
+
+    void GameOver() {
+        updateDisplay();
+        timer.stop();
+        if(firstend == 0) {
+            firstend++;
+            JOptionPane:
+            JOptionPane.showMessageDialog(null,
+                    "실패 ㅠㅠ\n걸린시간:" + time + "초\n맞춘횟수:" + (9 - rest), "실패화면",
+                    JOptionPane.INFORMATION_MESSAGE);
+        }
+    }
+
+    // 게임 종료시
+    void endGame() {
+        updateDisplay();
+        timer.stop(); // 타이머 멈추기
+        JOptionPane:
+        JOptionPane.showMessageDialog(null,
+                "와우~ 성공하셨군요!!\n걸린시간:" + time + "초\n시도횟수:" + cntTry, "성공화면",
+                JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    class CardClickedListener implements ActionListener {
+        private int row, col; // 몇번째 카드인지 저장하기 위한 공간
+
+        // 생성자를 이용하여, 값 저장
+        CardClickedListener(int row, int col) {
+            this.row = row;
+            this.col = col;
+        }
+
+        // 카드가 눌렸을때, 반응하는 메소드
+        @Override
+        public void actionPerformed(ActionEvent e) {
+            if (onClick[row][col]) {
+            }
+            else if (isChoice == 0) { // 첫번째 클릭이라면
+                isChoice++;
+                choice = card[row][col]; // 선택한 카드의 값 임시 저장
+                choiceRow = row; // 선택한 카드의 위치 임시 저장
+                choiceCol = col;
+                bCard[row][col].setIcon(icon[choice]); // 선택한 카드를 보여주기
+                onClick[row][col] = true;
+                if(choice == 10) {
+                    GameOver();
+                }
+            }
+            else if (isChoice == 1) { // 두번째 클릭이라면
+                Thread thread = new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        bCard[row][col].setIcon(icon[card[row][col]]);
+                        onClick[row][col] = true;
+
+                        if (choice == 10)
+                            GameOver();
+                        else {
+                            cntTry++; // 시도 횟수 증가시키기
+                            isChoice++;
+                            if (choice == card[row][col]) { // 만약 내용이 같은 카드를 찾았다면?
+                                rest--; // 맞춰야 하는 횟수 감소
+                            } else {
+                                try {
+                                    Thread.sleep(500);
+                                } catch (Exception e) {
+                                }
+                                bCard[row][col].setIcon(icon[0]); // 못 맞췄으니, 다시 뒤집기
+                                bCard[choiceRow][choiceCol].setIcon(icon[0]); // 못 맞췄으니, 다시 뒤집기
+                                onClick[row][col] = false;
+                                onClick[choiceRow][choiceCol] = false;
+                            }
+                            isChoice = 0; // 초기화
+                            choice = -1;
+                            choiceRow = choiceCol = -1;
+
+                            if (cntTry >= 20)
+                                for (int i = 0; i < 3; i++)
+                                    for (int j = 0; j < 6; j++)
+                                        card[i][j] = 10;
+
+                            updateDisplay();
+
+                            if (rest == 0)
+                                endGame(); // 만약 모두 맞췄다면, 게임 종료
+                        }
+                    }
+                });
+                thread.start();
+            }
+        }
+
+        // 프로그램을 잠시 딜레이 시키기 - 1
+        public void MatrixTime(int delayTime) {
+            long saveTime = System.currentTimeMillis();
+            long currTime = 0;
+
+            while (currTime - saveTime < delayTime) {
+                currTime = System.currentTimeMillis();
+            }
+        }
+
+        // 프로그램을 잠시 딜레이 시키기 - 2
+        public void ThreadTime(int delayTime) {
+            try {
+                Thread.sleep(delayTime);
+            } catch (Exception e) {
+                e.getStackTrace();
+            }
+        }
+    }
+
+    // Window X 버튼이 눌렸을때, 작동하는 코드 선언
+    class MyWindowAdapter extends WindowAdapter { // x눌러 윈도 창닫기
+        public void windowClosing(WindowEvent e) {
+            System.exit(0);
+        }
+    }
+}
