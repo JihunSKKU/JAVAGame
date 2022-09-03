@@ -1,0 +1,461 @@
+import javax.security.auth.login.CredentialException;
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.KeyEvent;
+import java.awt.event.KeyListener;
+import java.awt.image.BufferedImage;
+import java.util.ArrayList;
+
+class food {
+    int x, y, w = 20, h = 20;
+
+    public food(int x, int y) {
+        this.x = x;
+        this.y = y;
+    }
+}
+
+class enemy {
+    int x, y, dx, dy, w = 20, h = 20;
+
+    public enemy(int x, int y, int dx, int dy) {
+        this.x = x;
+        this.y = y;
+        this.dx = dx;
+        this.dy = dy;
+    }
+
+    public void moveen() {
+        x = x + dx;
+        y = y + dy;
+    }
+}
+
+class star {
+    int x, y, w=20, h=20;
+
+    public star(int x, int y) {
+        this.x=x;
+        this.y=y;
+    }
+}
+
+//Swing을 위한 JFrame 상속 / Runnable은 Thread 활용하기위하여 / KeyListener는 키 입력 처리
+public class slither extends JFrame implements Runnable, KeyListener {
+    private BufferedImage bi = null;            //화면을 그려놓을 버퍼공간
+    private ArrayList<food> foodList = null;    //먹이 목록을 저장할 ArrayList
+    private ArrayList<enemy> enList = null;     //적 목록을 저장할 ArrayList
+    private ArrayList<star> starList = null;
+
+    //키 누를때 true로! / KeyControl
+    private boolean left = true, right = false, up = false, down = false;
+
+    //게임이 Enter를 누르면 start = true
+    private boolean start = false, end = false, first = true;
+    private int w = 1000, h = 1000;                             //백그라운드 크기
+    private int xw = 20, xh = 20;            //플레이어의 초기 위치, 크기, 길이
+    private int size = 20, x = w/size/2, y = h/size/2, length = 0, score=0, highscore = 0, dx=0, dy=0, count = 0, star = 0, star1 = 0, timeprime=0, attack=0, co=0;
+    public static int time = 0, speedup = 0, delay = 50;
+
+    private int[][] MeList = new int[52][52];                 //지렁이가 지나간 자리를 표시하는 50x50 공간
+    //private int[][] MeList = new int[w/size][h/size];
+
+    //생성자를 이용하여, 초기값들을 설정함.
+    public slither() {
+        bi = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);  // 이미지(무언가)를 그려놓을 버퍼공간
+        foodList = new ArrayList<food>();
+        enList = new ArrayList<enemy>();
+        starList = new ArrayList<star>();
+
+        this.addKeyListener(this);   //Key 입력을 받기 위한 것
+        this.setSize(w, h);             //윈도우의 크기를 저장
+        this.setTitle("slither Game");  //타이틀 지정
+        this.setResizable(false);       //윈도우 크기조정(마우스 등)을 금지
+        this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        this.setVisible(true);          //윈도우 보여주기
+    }
+
+    //게임 초기화 하기
+    public void initGame() {
+        x = 25;                     //플레이어 위치 초기화
+        y = 25;
+        length = 1;                 //길이 초기화
+        foodList.clear();           //먹이 초기화
+        enList.clear();
+        starList.clear();
+        star = 0;
+        star1 = 0;
+        score = 0;
+        speedup = 0;
+        attack=0;
+        co=0;
+
+        //지렁이가 지나간 자리 초기화
+        for (int i = 0; i < 50; i++)
+            for (int j = 0; j < 50; j++)
+                MeList[i][j] = 0;
+
+        //초기화후 끄기
+        first = false;
+    }
+
+    //프로그램 돌리는 부분 / Runnable interface 구현할때 필요한 메소드
+    public void run() {
+        try {
+            int timer=0;
+            int foodTimer = 20 * delay ; //food 생성 시간
+
+            while (true) {
+                Thread.sleep(delay);
+                if (start) {
+                    if (first)
+                        initGame();     //처음 시작할떄, 초기화 하기
+
+                    if (foodTimer <= timer) {
+                        Create();       //food 생성하고
+                        Createen();
+                        count++;
+                        if(count>=10) {
+                            count = 0;
+                            Createstar();
+                        }
+                        timer = 0;      //타이머 초기화
+                    }
+                    timer += delay;     //타이머 증가
+                    time += delay;
+
+                    keyControl();       //키 제어
+                    crashChk();         //충돌 확인
+                    foodEat();          //먹이 먹는것 확인
+                    enEat();
+                    starEat();
+
+                    if(time-timeprime > 5000)
+                        attack = 0;
+
+                    score = length + star * 10 + star1;
+                    if(highscore < score)
+                        highscore = score;
+                }
+                draw();                 //화면에 그리기
+            }
+        }
+        catch (Exception e) {
+            e.printStackTrace();        //sleep을 사용하기 위하여, 예외처리를 함.
+        }
+    }
+
+    //충돌 체크
+    public void crashChk() {
+        //맵을 벗어나지 않을 경우, 그 위치에 길이를 입력하여, 흔적을 기록함.
+        if (y >= 50 || x >= 50 || x < 0 || y < 2) {
+            end = true;
+            start = false;
+        }
+        /*
+        if (y >= 50)
+            y = 2;
+        else if (x >= 50)
+            x = 0;
+        else if (x < 0)
+            x = 49;
+        else if(y < 2)
+            y = 49;
+        */
+
+        else if (MeList[x][y] > 0) {   //만약 본체와 충돌하면(흔적이 있는 곳으로 가면 종료
+            end = true;
+            start = false;
+        }
+        else {
+            MeList[x][y] = length;      //흔적 기록 (길이만큼 흔적을 남겨서, 그 길이만큼 출력하기
+        }
+    }
+
+    //food 임의의 위치에 출력하기
+    public void Create() {
+        if (foodList.size() <= 1000) {
+            int x = (int) (Math.random() * 50);   //50x50 크기의 공간에
+            int y = (int) (Math.random() * 48 + 2);   //랜덤한 공간  Math.random()은  0부터 1보다 작은 실수를 반환함.
+            food f = new food(x, y);              //food 객체를 만들어서
+            foodList.add(f);                      //footList ArrayList에 추가
+        }
+    }
+
+    public void Createen() {
+        if (enList.size() <= 100) {
+            double ran = Math.random() * 100;
+            if ((int) ran % 4 == 0) {
+                dx = 1;
+                dy = 1;
+            }
+            else if((int) ran % 4 == 1) {
+                dx = -1;
+                dy = 1;
+            }
+            else if((int) ran % 4 == 2) {
+                dx = 1;
+                dy = -1;
+            }
+            else if((int) ran % 4 == 3) {
+                dx = -1;
+                dy = -1;
+            }
+
+            int x = (int) (Math.random() * 50);   //50x50 크기의 공간에
+            int y = (int) (Math.random() * 48 + 2);   //랜덤한 공간  Math.random()은  0부터 1보다 작은 실수를 반환함.
+            enemy e = new enemy(x, y, dx, dy);              //food 객체를 만들어서
+            enList.add(e);                      //footList ArrayList에 추가
+        }
+    }
+
+    public void Createstar() {
+        if(starList.size() <= 100) {
+            int x = (int) (Math.random() * 50);
+            int y = (int) (Math.random() * 48 + 2);
+            star st = new star(x, y);
+            starList.add(st);
+        }
+    }
+
+    //food 먹는것 확인
+    public void foodEat() {
+        for (int i = 0; i < foodList.size(); i++) {  //food들이 저장되어 있는 ArrayList 확인
+            food f = foodList.get(i);
+            if (f.x == x && f.y == y) {          //지렁이 머리의 위치과 food 위치 일치 확인
+                length++;                       //길이 추가
+                foodList.remove(i);             //먹이 제거
+                if(enList.size()>0)
+                    enList.remove(0);
+            }
+        }
+    }
+
+    public void starEat() {
+        for (int k = 0; k < starList.size(); k++) {
+            star st = starList.get(k);
+            if (st.x == x && st.y == y) {
+                if (attack == 0) {
+                    star++;
+                    starList.remove(k);
+                    timeprime = time;
+                    attack = 1;
+                } else {
+                    star++;
+                    star1 += enList.size();
+                    enList.clear();
+                    star1 += foodList.size();
+                    foodList.clear();
+
+                    starList.remove(k);
+                    star1 += length - 1;
+                    length = 1;
+
+                    timeprime = time;
+                    attack = 1;
+                }
+            }
+        }
+    }
+
+    public void enEat() {
+        for (int j=0; j < enList.size(); j++) {
+            enemy e = enList.get(j);
+            if(MeList[e.x][e.y] > 0 /*e.x == x && e.y == y*/) {
+                if(attack == 1) {
+                    enList.remove(j);
+                    score++;
+                }
+                else {
+                    end = true;
+                    start = false;
+                }
+            }
+        }
+    }
+
+    public void draw() {
+        Graphics gs = bi.getGraphics();         //버퍼공간 불러오기
+        gs.setColor(Color.white);               //하얀섹 설정
+        gs.fillRect(0, 0, w, h);         //백그라운드 하얀색으로 설정
+
+        gs.setColor(Color.black);
+        gs.setFont(new Font("더페이스샵 잉크립퀴드체", Font.PLAIN, 30));
+
+        if (!start && !end) {
+            gs.drawString("게임시작 : Enter", 420, 400);
+            gs.drawString("스타는 10초마다 생성이 되고 먹게되면", 350, 500);
+            gs.drawString("먹이를 먹으면 적이 1명씩 줄어듭니다.", 350, 450);
+            gs.drawString("5초간 적을 죽일 수 있게 되며", 375, 550);
+            gs.drawString("점수가 10 증가합니다.", 400, 600);
+            gs.drawString("스타 상태에서 스타를 먹으면 길이가 1이 되며", 330, 650);
+            gs.drawString("모든 적과 먹이가 사라지고 그만큼 score를 얻습니다.", 310, 700);
+        }
+
+        gs.drawString("속도 증가, 적 중지 : A", 30, 100);                 //게임시작 하는 Enter 키 안내
+        gs.drawString("현재길이 : " + length, 30, 140);             //현재 길이 출력
+        gs.drawString("먹이 수 : " + foodList.size(), 30, 180);    //음식의 갯수 출력
+        gs.drawString("적 수 : " + enList.size(), 30 ,220);
+        gs.drawString("현재점수 : " + score, 30, 260);
+        gs.drawString("최고점수 : " + highscore, 30, 300);
+
+        if(time >= 60000 && time <600000)
+            gs.drawString("시간 - 0"+time/60000 + " : " + (time % 60000) / 1000, 30, 340);
+        else if(time >=600000)
+            gs.drawString("시간 - "+time/60000 + " : " + (time % 60000) / 1000, 30, 340);
+        else if(time < 10000)
+            gs.drawString("시간 - 00 : 0"+ time/1000, 30, 340);
+        else
+            gs.drawString("시간 - 00 : " + time/1000, 30, 340);
+
+        if (end) {   //게임 종료시 이미지 띄우기
+            gs.drawString("G A M E     O V E R", 410, 450);
+            gs.drawString("게임 재시작 : Enter", 420, 500);
+        }
+
+        if (!end) {
+            //지렁이 그리기
+            if(attack == 1) {
+                if(time-timeprime>4000) {
+                    if (co % 2 == 1) {
+                        gs.setColor(Color.BLACK);
+                        co++;
+                    }
+                    else {
+                        gs.setColor(Color.green);
+                        co++;
+                    }
+                }
+                else
+                    gs.setColor(Color.green);
+            }
+            else
+                gs.setColor(Color.black);
+
+            //MeList 배열에 저장되어 있는 지렁이가 지나간 흔적을 검색해서 그리기
+            //50x50 배열에서 500x500 자리에 출력하기 위하여 연산함.
+            for (int i = 0; i < 50; i++) {
+                for (int j = 0; j < 50; j++) {
+                    if (MeList[i][j] > 0) {
+                        gs.fillRect(i * xw, j * xh, xw, xh);
+                        //출력 하고나서, 지나갔으므로 길이를 하나줄임
+                        MeList[i][j]--;
+                    }
+                }
+            }
+            //먹이 출력하기
+            gs.setColor(Color.blue);
+            for (int i = 0; i < foodList.size(); i++) {
+                food f = foodList.get(i);
+                gs.fillRect(f.x * f.w, f.y * f.h, f.w, f.h);
+            }
+
+            gs.setColor(Color.red);
+            for (int j = 0; j < enList.size(); j++) {
+                enemy e = enList.get(j);
+                gs.fillRect(e.x * e.w, e.y * e.h, e.w, e.h);
+                if (e.y <= 2) e.dy = 1;
+                if (e.x <= 0) e.dx = 1;
+                if (e.y >= 49) e.dy = -1;
+                if (e.x >= 49) e.dx = -1;
+
+                if(speedup == 0)
+                    e.moveen();
+            }
+
+            gs.setColor(Color.yellow);
+            for (int k = 0 ; k<starList.size(); k++) {
+                star st = starList.get(k);
+                gs.fillRect(st.x * st.w, st.y * st.h, st.w, st.h);
+            }
+        }
+
+        Graphics ge = this.getGraphics();                              //실제공간 불러오기
+        ge.drawImage(bi, 0, 0, w, h, this);             //실제공간에 그리기
+    }
+
+    //본체 움직이게 하는 코드
+    public void keyControl() {
+        int conPx = 1;
+
+        if (left) x -= conPx;
+        if (right) x += conPx;
+        if (up) y -= conPx;
+        if (down) y += conPx;
+    }
+
+    //KeyListener interface를 가져다가 구현해야하는 메소드
+    public void keyPressed(KeyEvent ke) {
+        switch (ke.getKeyCode()) {
+            case KeyEvent.VK_LEFT:
+                //지렁이는 멈춰있는 경우가 없으므로,
+                // 4가지 방항중 한 방향은 항상 true 이여야함.
+                if(right==false) {
+                    left = true;
+                    right = false;
+                    up = false;
+                    down = false;
+                }
+                break;
+            case KeyEvent.VK_RIGHT:
+                if(left==false) {
+                    left = false;
+                    right = true;
+                    up = false;
+                    down = false;
+                }
+                break;
+            case KeyEvent.VK_UP:
+                if(down==false) {
+                    left = false;
+                    right = false;
+                    up = true;
+                    down = false;
+                }
+                break;
+            case KeyEvent.VK_DOWN:
+                if(up==false) {
+                    left = false;
+                    right = false;
+                    up = false;
+                    down = true;
+                }
+                break;
+            case KeyEvent.VK_ENTER:
+                if(start==false) {
+                    start = true;
+                    end = false;
+                    first = true;
+                    speedup = 0;
+                    time = 0;
+                    count = 0;
+                    attack = 0;
+                }
+                break;
+            case KeyEvent.VK_A:
+                speedup = 1;
+                delay = 25;
+                break;
+        }
+    }
+
+    //KeyListener interface를 가져다가 구현해야하는 메소드
+    public void keyReleased(KeyEvent ke) {
+        switch (ke.getKeyCode()) {
+            case KeyEvent.VK_A:
+                speedup = 0;
+                delay = 50;
+                break;
+        }
+    }
+
+    //KeyListener interface를 가져다가 구현해야하는 메소드
+    public void keyTyped(KeyEvent ke) {
+    }
+
+
+    public static void main(String[] args) {
+        Thread t = new Thread(new slither());
+        t.start();
+    }
+}
