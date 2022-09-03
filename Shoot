@@ -1,0 +1,536 @@
+import java.awt.*;
+import java.awt.event.*;
+import java.awt.image.*;
+import java.util.ArrayList;
+import javax.swing.*;
+
+/** 적 위치정보 저장과 이동시킬 메소드(moveEn)*/
+class Enemy {
+    int x, y, w = 15, h = 15;
+
+    /** 생성자를 이용하여, 최초 위치 결정 */
+    public Enemy(int x, int y) {
+        this.x = x;
+        this.y = y;
+    }
+    /** 적을 이동시키는 메소드 */
+    public void moveEn() {
+        double xmove = Math.random() * 100;
+        if ((int) xmove % 2 == 1)
+            x -= 2;
+        else
+            x += 2;
+        y = y + 4 + Shoot.level/2;
+    }
+}
+
+class EnemyPrime {
+    int x, y, w = 15, h = 15;
+
+    /** 생성자를 이용하여, 최초 위치 결정 */
+    public EnemyPrime(int x, int y) {
+        this.x = x;
+        this.y = y;
+    }
+    /** 적을 이동시키는 메소드 */
+    public void moveEnPrime() {
+        double xmove = Math.random() * 100;
+        if ((int) xmove % 2 == 1)
+            x -= 2;
+        else
+            x += 2;
+        y = y - 4 - Shoot.level/10;
+    }
+}
+
+/** 미사일 위치정보 저장과 이동시킬 메소드(moveMs) */
+class Ms {
+    int x, y, dx, dy, w = 15 + Shoot.size, h = 15 + Shoot.size;
+
+    /** 생성자를 이용하여, 최초 위치 결정 */
+    public Ms(int x, int y, int dx, int dy) {
+        this.x = x;
+        this.y = y;
+        this.dx = dx;
+        this.dy = dy;
+    }
+
+    /** 미사일 이동시키는 메소드 */
+    public void moveMs() {
+        double xmove = Math.random() * 100;
+        if ((int) xmove % 2 == 1)
+            x -= 1;
+        else
+            x += 1;
+        x = x + dx;
+        y = y + dy;
+    }
+}
+
+class Health {
+    int x, y, w = 20, h = 20;
+
+    public Health(int x, int y) {
+        this.x = x;
+        this.y = y;
+    }
+}
+
+/** Swing을 위한 JFrame 상속 / Runnable은 Thread 활용하기위하여 / KeyListener는 키 입력 처리 */
+public class Shoot extends JFrame implements Runnable, KeyListener {
+    private BufferedImage bi = null;            //화면을 그려놓을 버퍼공간
+    private ArrayList<Ms> msList = null;        //미사일들의 위치를 저장해놓을 ArrayList
+    private ArrayList<Enemy> enList = null;     //적들의 위치를 저장해놓을 ArrayList
+    private ArrayList<Enemy> enListPrime = null;
+    private ArrayList<EnemyPrime> enListPrime1 = null;
+    private ArrayList<Health> healthList = null;
+
+    /** 키 눌릴때, 눌려있는 상태라면 true로! */
+    private boolean left = false, right = false, up = false, down = false, fire = false;
+
+    /** 게임이 Enter를 누르면 start = true */
+    private boolean start = false, end = false;
+    private int w = 900, h = 1500, x = 400, y = 1350, dx, dy, xw = 30, xh = 30, score=0, retire=0, mov=0;
+    public static int level=1, stact=1, velocity=0, size=0, speed=0, hyperstact=0, triplegun=0, PenetrateGun=0;
+
+    /** 생성자를 이용하여, 초기값들을 설정함. */
+    public Shoot() {
+        bi = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);  // 이미지(무언가)를 그려놓을 버퍼공간
+        msList = new ArrayList();       //미사일들을 저장할 ArrayList
+        enList = new ArrayList();       //적들을 저장할 ArrayList
+        enListPrime = new ArrayList();
+        enListPrime1 = new ArrayList();
+        healthList = new ArrayList();
+
+        this.addKeyListener(this);      //Key 입력을 받기 위한 것
+        this.setSize(w, h);             //윈도우의 크기를 저장
+        this.setTitle("Shooting Game"); //타이틀 지정
+        this.setResizable(false);       //윈도우 크기조정(마우스 등)을 금지
+        this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        this.setVisible(true);          //윈도우 보여주기
+    }
+
+
+    /** 프로그램 돌리는 부분 / Runnable interface 구현할때 필요한 메소드 */
+    public void run() {
+        try {
+            int msCnt = 0;      //미사일 갯수
+            int enCnt = 0;      //적 갯수
+            int timer = 10;
+            while (true) {
+                Thread.sleep(timer);
+
+                if (start) {
+                    if (enCnt > 2000 - (level-1) * 50) { //적은 2초마다 생성
+                        enCreate();     //적 생성 메소드 호출
+                        enCnt = 0;      //생성후 타이머 초기화
+                    }
+                    if (msCnt >= 100 - speed * 5) { //미사일 발사는 0.1 초마다 가능
+                        fireMs();       //미사일 발사 메소드 호출
+                        msCnt = 0;      //생성후 타이머 초기화
+                    }
+
+                    msCnt += timer;     //타이머 증가
+                    enCnt += timer;     //타이머 증가
+                    keyControl();       //keyControl 적용
+                    crashChk();         //충돌 체크
+                }
+                draw();                 //화면에 그리기
+            }
+        } catch (Exception e) {
+            e.printStackTrace();        //sleep을 사용하기 위하여, 예외처리를 함.
+        }
+    }
+
+    /** 미사일 발사 메소드 */
+    public void fireMs() {
+        if (fire) {
+            Ms m = new Ms(this.x, this.y, this.dx, this.dy);  //미사일 객체를 만듬
+            m.x = x + xw / 2 - m.w / 2;
+            m.dx = 0;
+            m.dy = -6 - Shoot.level / 2;
+            msList.add(m);                  //미사일을 저장할 ArrayList에 추가
+            if (triplegun == 1) {
+                mov++;
+                if (mov % 2 == 1) {
+                    m = new Ms(this.x, this.y, this.dx, this.dy);
+                    m.x = x + xw / 2 - m.w / 2;
+                    m.dx = -2 - Shoot.level / 6;
+                    m.dy = -6 - Shoot.level / 2;
+                    msList.add(m);
+                }
+                else {
+                    m = new Ms(this.x, this.y, this.dx, this.dy);
+                    m.x = x + xw / 2 - m.w / 2;
+                    m.dx = 2 + Shoot.level / 6;
+                    m.dy = -6 - Shoot.level / 2;
+                    msList.add(m);
+                }
+            }
+        }
+    }
+
+    /** 적 생성 메소드 */
+    public void enCreate() {
+        for (int i = 0; i < 19 + level; i++) {      //적 나오는 수
+            double rx = Math.random() * (w - xw);   //random을 이용해서 임의의 위치에 만들기
+            double ry = Math.random() * 50;
+            Enemy en = new Enemy((int) rx, (int) ry); //적 객체 만들기
+            enList.add(en);
+        }
+        for (int i = 0; i < 5 + level/15 ; i++) {      //적 나오는 수
+            double rx = Math.random() * (w - xw);   //random을 이용해서 임의의 위치에 만들기
+            double ry = 1450+Math.random() * 50;
+            EnemyPrime en = new EnemyPrime((int) rx, (int) ry); //적 객체 만들기
+            enListPrime1.add(en);
+        }
+        for(int i = 0; i < 5 + level/8; i++) {
+            double rx = Math.random() * (w - xw);   //random을 이용해서 임의의 위치에 만들기
+            double ry = Math.random() * 50;
+            Enemy en = new Enemy((int) rx, (int) ry); //적 객체 만들기
+            enListPrime.add(en);
+        }
+    }
+
+    public void healthCreate() {
+        for (int i = 0; i < retire; i++) {
+            double x = 330 + i * 23;
+            double y = 1400;
+            Health he = new Health((int) x, (int) y);
+            healthList.add(he);
+        }
+    }
+
+    /** 충돌 확인 메소드 */
+    public void crashChk() {
+        Graphics g = this.getGraphics();                //그려져 있는 그래픽 가져오기
+        Polygon p = null;
+        for (int i = 0; i < msList.size(); i++) {
+            Ms m = msList.get(i);
+            for (int j = 0; j < enList.size(); j++) {    //이중 for문을 이용해서 미사일과 적 객체 1:1 대응
+                Enemy e = enList.get(j);
+                int[] xpoints = {m.x, (m.x + m.w), (m.x + m.w), m.x};   //x좌표를 모두 저장
+                int[] ypoints = {m.y, m.y, (m.y + m.h), (m.y + m.h)};   //y좌표를 모두 저장
+                p = new Polygon(xpoints, ypoints, 4);
+                if (p.intersects((double) e.x, (double) e.y, (double) e.w, (double) e.h)) {  //intersects 교차하는지 확인
+                    if(PenetrateGun==0 && i<msList.size())
+                        msList.remove(i);
+                    enList.remove(j);
+
+                    score++;
+                    level = score/20+1;
+                    if(score >= 580) level=30;
+                    if(score%20==0 && score<=580) stact++;
+                    if(score == 280 || score == 580) hyperstact++;
+                    if(score%100==0 && score>0 && score<=580) {
+                        retire++;
+                        healthList.clear();
+                        healthCreate();
+                    }
+                    if(score>=1000) {
+                        start = false;
+                        end = true;
+                    }
+                }
+            }
+        }
+        for (int i = 0; i < enList.size(); i++) {
+            Enemy e = enList.get(i);
+            int[] xpoints = {x, (x + xw), (x + xw), x};
+            int[] ypoints = {y, y, (y + xh), (y + xh)};
+            p = new Polygon(xpoints, ypoints, 4);       //본체 그리기
+            if (p.intersects((double) e.x, (double) e.y, (double) e.w, (double) e.h)) {
+                enList.remove(i);
+                if(retire>1) {
+                    retire--;
+                    healthList.clear();
+                    healthCreate();
+                }
+                else {
+                    retire--;
+                    start = false;
+                    end = true;
+                }
+            }
+        }
+        for (int i = 0; i < enListPrime.size(); i++) {
+            Enemy e = enListPrime.get(i);
+            int[] xpoints = {x, (x + xw), (x + xw), x};
+            int[] ypoints = {y, y, (y + xh), (y + xh)};
+            p = new Polygon(xpoints, ypoints, 4);       //본체 그리기
+            if (p.intersects((double) e.x, (double) e.y, (double) e.w, (double) e.h)) {
+                enListPrime.remove(i);
+                if(retire>1) {
+                    retire--;
+                    healthList.clear();
+                    healthCreate();
+                }
+                else {
+                    retire--;
+                    start = false;
+                    end = true;
+                }
+            }
+        }
+        for (int i = 0; i < enListPrime1.size(); i++) {
+            EnemyPrime e = enListPrime1.get(i);
+            int[] xpoints = {x, (x + xw), (x + xw), x};
+            int[] ypoints = {y, y, (y + xh), (y + xh)};
+            p = new Polygon(xpoints, ypoints, 4);       //본체 그리기
+            if (p.intersects((double) e.x, (double) e.y, (double) e.w, (double) e.h)) {
+                enListPrime1.remove(i);
+                if(retire>1) {
+                    retire--;
+                    healthList.clear();
+                    healthCreate();
+                }
+                else {
+                    retire--;
+                    start = false;
+                    end = true;
+                }
+            }
+        }
+    }
+
+    /** 그림 그리는 메소드 */
+    public void draw() {
+        Graphics gs = bi.getGraphics();                          //버퍼공간 불러오기
+        gs.setColor(Color.white);
+        gs.fillRect(0, 0, w, h);
+
+        gs.setColor(Color.black);
+        gs.setFont(new Font("더페이스샵 잉크립퀴드체", Font.PLAIN, 30));
+
+        if(start == false && end == false) {
+            gs.drawString("시작 버튼 : Enter", 330, 900); //게임시작 하는 Enter 키 안내
+            gs.drawString("간단한 슈팅 게임입니다.", 310, 450);
+            gs.drawString("검정색 적은 죽일 수 있지만,", 300, 500);
+            gs.drawString("빨강색 적은 죽일 수 없습니다.", 295, 550);
+            gs.drawString("만렙은 30Lv 이고,", 340, 600);
+            gs.drawString("각 스텟은 10까지 찍을 수 있습니다.", 280, 650);
+            gs.drawString("Score가 20배수가 될 때마다 Level이 1씩 오릅니다.", 220, 700);
+            gs.drawString("Level이 5배수가 될 때마다 체력이 1씩 오릅니다.", 230, 750);
+            gs.drawString("1000점을 얻으면 Clear입니다.", 300, 800);
+        }
+
+        if(fire)
+            gs.drawString("공격 Off (A) - 현재 : 공격 On", 20, 95);
+        else
+            gs.drawString("공격 On (A) - 현재 : 공격 Off", 20, 95);
+        gs.drawString("Level : "+ level, 20, 130);
+        gs.drawString("Score : "+ score, 20, 165);
+        gs.drawString("Stact : "+ stact, 20, 200);
+        gs.drawString("체력 : "+retire, 20,235);
+
+        gs.drawString("이동속도 : "+velocity , 675, 95);
+        gs.drawString("미사일 크기 : "+size , 640, 130);
+        gs.drawString("발사속도 : "+speed , 670, 165);
+        if(start && stact>0 && hyperstact==0) {
+            if(velocity + size + speed < 30)
+                gs.drawString("스텟을 찍으세요", 350, 500);
+            if(velocity<10)
+                gs.drawString("이동속도 : (Q)", 350, 540);
+            if(size<10)
+                gs.drawString("미사일 크기 : (W)", 350, 580);
+            if(speed<10)
+                gs.drawString("발사속도 : (E)", 350, 620);
+        }
+
+        if(hyperstact>0) {
+            if(triplegun+PenetrateGun<2)
+                gs.drawString("전직을 선택하세요", 350, 500);
+            if(triplegun<1)
+                gs.drawString("TripleGun : 총알이 2발씩 나감 (S)", 350, 540);
+            if(PenetrateGun<1)
+                gs.drawString("PenetrateGun : 총알이 관통함 (D)", 350, 580);
+        }
+        if(triplegun == 1)
+            gs.drawString("전직 : DoubleGun", 20, 270);
+        if(PenetrateGun == 1) {
+            if(triplegun == 0)
+                gs.drawString("전직 : PenetrateGun", 20, 270);
+            if(triplegun == 1)
+                gs.drawString("PenetrateGun", 75, 305);
+        }
+
+
+        if (end && score<1000) {   //게임 종료시 이미지 띄우기
+            gs.setFont(new Font("더페이스샵 잉크립퀴드체", Font.PLAIN, 40));
+            gs.drawString("G A M E     O V E R", 310, 630);
+            gs.drawString(":::  " + score + "점  :::", 370, 690);
+            gs.drawString("S T A R T   A G A I N (enter)", 250, 780);
+        }
+        if (end && score>=1000) {
+
+            gs.setFont(new Font("더페이스샵 잉크립퀴드체", Font.PLAIN, 40));
+            gs.drawString("G A M E    C L E A R", 320, 630);
+            gs.drawString("C o n g r a t u l a t i o n s ~ !", 275, 690);
+            gs.drawString("S T A R T   A G A I N (enter)", 260, 780);
+        }
+
+        //gs.fillRect(x, y, xw, xh);
+        gs.fillRoundRect(x, y, xw, xh, 100, 100);  //본체 원 그리기
+
+        if (!end) {
+            gs.setColor(Color.blue);                    //그릴 색상 지정 - blue
+            for (int i = 0; i < msList.size(); i++) {   //미사일 갯수 만큼 반복해서 그리기
+                Ms m = msList.get(i);                  //ArrayList에서 값 찾기
+                gs.drawOval(m.x, m.y, m.w, m.h);        //그리기 0형태
+                if (m.y < 0) msList.remove(i);          //만약 y축이 0 이하이면, ArrayList에서 제거
+                m.moveMs();
+            }
+
+            gs.setColor(Color.black);                   //그릴 색상 지정 - black
+            for (int i = 0; i < enList.size(); i++) {   //적 갯수 만큼 반복해서 그리기
+                Enemy e = enList.get(i);                //ArraList에서 값 찾기
+                gs.fillRect(e.x, e.y, e.w, e.h);        //그리기 네모
+                if (e.y > h) enList.remove(i);          //만약 y축 초과되면, ArrayList에서 제거
+                e.moveEn();                             //움직여 놓기
+            }
+
+            gs.setColor(Color.red);
+            for (int i = 0; i < enListPrime.size(); i++) {   //적 갯수 만큼 반복해서 그리기
+                Enemy e = enListPrime.get(i);                //ArraList에서 값 찾기
+                gs.fillRect(e.x, e.y, e.w, e.h);        //그리기 네모
+                if (e.y > h) enListPrime.remove(i);          //만약 y축 초과되면, ArrayList에서 제거
+                e.moveEn();                             //움직여 놓기
+            }
+
+            gs.setColor(Color.red);
+            for (int i = 0; i < enListPrime1.size(); i++) {   //적 갯수 만큼 반복해서 그리기
+                EnemyPrime e = enListPrime1.get(i);                //ArraList에서 값 찾기
+                gs.fillRect(e.x, e.y, e.w, e.h);        //그리기 네모
+                if (e.y < 0) enListPrime1.remove(i);          //만약 y축 초과되면, ArrayList에서 제거
+                e.moveEnPrime();                             //움직여 놓기
+            }
+
+            gs.setColor(Color.black);
+            for(int i = 0; i<healthList.size(); i++) {
+                Health h = healthList.get(i);
+                gs.fillOval(h.x, h.y, h.w, h.h);
+            }
+        }
+
+        Graphics ge = this.getGraphics();               //실제공간 불러오기
+        ge.drawImage(bi, 0, 0, w, h, this);             //실제공간에 그리기
+    }
+
+    /** 본체 움직이게 하는 코드 */
+    public void keyControl() {
+        int conPx = 5 + velocity/2;
+
+        if (0 < x) {
+            if (left) x -= conPx;
+        }
+        if (w > x + xw) {
+            if (right) x += conPx;
+        }
+        if (25 < y) {
+            if (up) y -= conPx;
+        }
+        if (h > y + xh) {
+            if (down) y += conPx;
+        }
+    }
+
+    /** KeyListener interface를 가져다가 구현해야하는 메소드 */
+    public void keyPressed(KeyEvent ke) {
+        switch (ke.getKeyCode()) {
+            case KeyEvent.VK_LEFT:
+                left = true;
+                break;
+            case KeyEvent.VK_RIGHT:
+                right = true;
+                break;
+            case KeyEvent.VK_UP:
+                up = true;
+                break;
+            case KeyEvent.VK_DOWN:
+                down = true;
+                break;
+            case KeyEvent.VK_A:
+                if(fire == false)
+                    fire = true;
+                else
+                    fire = false;
+                break;
+            case KeyEvent.VK_ENTER:
+                if(start == false && end == false) {
+                    retire = 5;
+                    healthCreate();
+                    start = true;
+                }
+                if(start == false && end == true) {
+                    retire = 5;
+                    end = false;
+                    fire = false;
+                    x = 400; y = 1350; score = 0; mov = 0;
+                    level=1; stact=1; velocity=0; size=0; speed=0; hyperstact=0; triplegun=0; PenetrateGun=0;
+                    enList.clear();
+                    enListPrime.clear();
+                    enListPrime1.clear();
+                    msList.clear();
+                    healthList.clear();
+                    healthCreate();
+                }
+                break;
+            case KeyEvent.VK_Q:
+                if(stact>0 && velocity<10 && start) {
+                    velocity++;
+                    stact--;
+                }
+                break;
+            case KeyEvent.VK_W:
+                if(stact>0 && size<10 && start) {
+                    size++;
+                    stact--;
+                }
+                break;
+            case KeyEvent.VK_E:
+                if(stact>0 && speed<10 && start) {
+                    speed++;
+                    stact--;
+                }
+                break;
+            case KeyEvent.VK_S:
+                if(hyperstact>0 && triplegun<1 && start) {
+                    triplegun++;
+                    hyperstact--;
+                }
+                break;
+            case KeyEvent.VK_D:
+                if(hyperstact>0 && PenetrateGun<1 && start) {
+                    PenetrateGun++;
+                    hyperstact--;
+                }
+                break;
+        }
+    }
+
+    /** KeyListener interface를 가져다가 구현해야하는 메소드 */
+    public void keyReleased(KeyEvent ke) {
+        switch (ke.getKeyCode()) {
+            case KeyEvent.VK_LEFT:
+                left = false;
+                break;
+            case KeyEvent.VK_RIGHT:
+                right = false;
+                break;
+            case KeyEvent.VK_UP:
+                up = false;
+                break;
+            case KeyEvent.VK_DOWN:
+                down = false;
+                break;
+        }
+    }
+
+    /** KeyListener interface를 가져다가 구현해야하는 메소드 */
+    public void keyTyped(KeyEvent ke) {}
+
+    public static void main(String[] args) {
+        Thread t = new Thread(new Shoot());
+        t.start();
+    }
+}
